@@ -14,102 +14,81 @@ import java.util.regex.Pattern
  *     Tag#HASHTAG_RE</a>.
  */
 private const val HASHTAG_SEPARATORS = "_\\u00B7\\u30FB\\u200c"
-private const val x = "(?:^|[^/)\\w])#(([\\w_][\\w$HASHTAG_SEPARATORS]*[\\p{Alpha}$HASHTAG_SEPARATORS][\\w$HASHTAG_SEPARATORS]*[\\w_])|([\\w_]*[\\p{Alpha}][\\w_]*))"
-
-private const val TAG_REGEX = "(?<![=/)\\p{Alnum}])(#(([\\w_][\\w$HASHTAG_SEPARATORS]*[\\p{Alpha}$HASHTAG_SEPARATORS][\\w$HASHTAG_SEPARATORS]*[\\w_])|([\\w_]*[\\p{Alpha}][\\w_]*)))"
+internal const val TAG_PATTERN_STRING = "(?<![=/)\\p{Alnum}])(#(([\\w_][\\w$HASHTAG_SEPARATORS]*[\\p{Alpha}$HASHTAG_SEPARATORS][\\w$HASHTAG_SEPARATORS]*[\\w_])|([\\w_]*[\\p{Alpha}][\\w_]*)))"
+private val TAG_PATTERN = TAG_PATTERN_STRING.toPattern(Pattern.CASE_INSENSITIVE)
 
 /**
  * @see <a href="https://github.com/tootsuite/mastodon/blob/master/app/models/account.rb">
  *     Account#MENTION_RE</a>
  */
-private const val USERNAME_REGEX = "[a-z0-9_]+([a-z0-9_.-]+[a-z0-9_]+)?"
-private const val MENTION_REGEX = "(?<![=/\\w])(@($USERNAME_REGEX)(?:@[\\w.-]+[\\w]+)?)"
+private const val USERNAME_PATTERN_STRING = "[a-z0-9_]+([a-z0-9_.-]+[a-z0-9_]+)?"
+internal const val MENTION_PATTERN_STRING = "(?<![=/\\w])(@($USERNAME_PATTERN_STRING)(?:@[\\w.-]+[\\w]+)?)"
+private val MENTION_PATTERN = MENTION_PATTERN_STRING.toPattern(Pattern.CASE_INSENSITIVE)
 
+private val VALID_URL_PATTERN = VALID_URL_PATTERN_STRING.toPattern(Pattern.CASE_INSENSITIVE)
 
-private val spanClasses = listOf(ForegroundColorSpan::class.java, URLSpan::class.java)
-private val finders = listOf(
-    PatternFinder("http://", FoundMatchType.HTTP_URL, VALID_URL_PATTERN_STRING),
-    PatternFinder("https://", FoundMatchType.HTTPS_URL, VALID_URL_PATTERN_STRING),
-    PatternFinder("#", FoundMatchType.TAG, TAG_REGEX),
-    PatternFinder("@", FoundMatchType.MENTION, MENTION_REGEX)
+val defaultFinders = listOf(
+    PatternFinder("http", FoundMatchType.HTTP_URL, VALID_URL_PATTERN),
+    PatternFinder("#", FoundMatchType.TAG, TAG_PATTERN),
+    PatternFinder("@", FoundMatchType.MENTION, MENTION_PATTERN)
 )
 
-private enum class FoundMatchType {
+enum class FoundMatchType {
     HTTP_URL,
     HTTPS_URL,
     TAG,
     MENTION
 }
 
-private class PatternFinder(
+class PatternFinder(
     val searchString: String,
     val type: FoundMatchType,
-    regex: String
-) {
-    val pattern: Pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE)
-}
+    val pattern: Pattern
+)
 
 /**
  * Takes text containing mentions and hashtags and urls and makes them the given colour.
+ * @param finders The finders to use. This is here so they can be overridden from unit tests.
  */
-fun highlightSpans(text: Spannable, colour: Int) {
-    // Strip all existing colour spans.
-    for (spanClass in spanClasses) {
-        clearSpans(text, spanClass)
+fun Spannable.highlightSpans(colour: Int, finders: List<PatternFinder> = defaultFinders) {
+    // Strip all existing spans
+    for (span in getSpans(0, length, Any::class.java)) {
+        removeSpan(span)
     }
 
-    var currentIndex = 0
+    for (finder in finders) {
+        if (this.contains(finder.searchString)) {
+            val matcher = finder.pattern.matcher(this)
 
-    while (currentIndex < text.length) {
-        for(finder in finders) {
-            if (text.startsWith(finder.searchString, startIndex = currentIndex)) {
+            while (matcher.find()) {
+                val start = matcher.start(1)
 
-                val offset = if (currentIndex > 0) -1 else 0
+                val end = matcher.end(1)
 
-                val matcher = finder.pattern.matcher(text.substring(currentIndex + offset))
-
-                if (matcher.find()) {
-                    val start = matcher.start(1) + currentIndex + offset
-
-                    if (start != currentIndex) {
-                        currentIndex += finder.searchString.length - 1
-                        break
-                    }
-
-                    val end = matcher.end(1) + currentIndex + offset
-
-                    text.setSpan(
-                        getSpan(finder.type, text, colour, start, end),
+                if (this.getSpans(start, end, Any::class.java).isEmpty()) {
+                    this.setSpan(
+                        getSpan(finder.type, this, colour, start, end),
                         start,
                         end,
                         Spanned.SPAN_INCLUSIVE_EXCLUSIVE
                     )
-                    currentIndex = end - 1
-                    break
                 }
             }
         }
-        currentIndex++
-    }
 
-}
-
-private fun <T> clearSpans(text: Spannable, spanClass: Class<T>) {
-    for (span in text.getSpans(0, text.length, spanClass)) {
-        text.removeSpan(span)
     }
 }
 
 private fun getSpan(
     matchType: FoundMatchType,
-    text: CharSequence,
+    string: CharSequence,
     colour: Int,
     start: Int,
     end: Int
 ): CharacterStyle {
     return when (matchType) {
-        FoundMatchType.HTTP_URL, FoundMatchType.HTTPS_URL -> NoUnderlineURLSpan(text.substring(start, end))
-        FoundMatchType.MENTION -> MentionSpan(text.substring(start, end))
+        FoundMatchType.HTTP_URL, FoundMatchType.HTTPS_URL -> NoUnderlineURLSpan(string.substring(start, end))
+        FoundMatchType.MENTION -> MentionSpan(string.substring(start, end))
         else -> ForegroundColorSpan(colour)
     }
 }

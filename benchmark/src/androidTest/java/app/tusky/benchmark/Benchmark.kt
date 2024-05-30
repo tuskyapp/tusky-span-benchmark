@@ -22,7 +22,7 @@ class Benchmark {
     @get:Rule
     val benchmarkRule = BenchmarkRule()
 
-    val test1 = "test of a status with #one hashtag"
+    val test1 = "test of a status with #one hashtag http"
     val test2 = """
         test
         http:// #hashtag https://connyduck.at/
@@ -51,7 +51,7 @@ class Benchmark {
     @Test
     fun new_1() {
         benchmarkRule.measureRepeated {
-            highlightSpans(SpannableString(test1), Color.RED)
+            SpannableString(test1).highlightSpans(Color.RED)
         }
     }
 
@@ -65,7 +65,7 @@ class Benchmark {
     @Test
     fun new_2() {
         benchmarkRule.measureRepeated {
-            highlightSpans(SpannableString(test2), Color.RED)
+            SpannableString(test2).highlightSpans(Color.RED)
         }
     }
 
@@ -79,7 +79,7 @@ class Benchmark {
     @Test
     fun new_3() {
         benchmarkRule.measureRepeated {
-            highlightSpans(SpannableString(test3), Color.RED)
+            SpannableString(test3).highlightSpans(Color.RED)
         }
     }
 
@@ -93,7 +93,7 @@ class Benchmark {
     @Test
     fun new_4() {
         benchmarkRule.measureRepeated {
-            highlightSpans(SpannableString(test4), Color.RED)
+            SpannableString(test4).highlightSpans(Color.RED)
         }
     }
 }
